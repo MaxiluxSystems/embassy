@@ -8,7 +8,7 @@ use cfg_if::cfg_if;
 use fdcan;
 pub use fdcan::frame::{RxFrameInfo, TxFrameHeader, FrameFormat};
 pub use fdcan::id::{StandardId, ExtendedId, Id};
-pub use fdcan::{config, filter};
+pub use fdcan::{config, filter, NormalOperationMode, InternalLoopbackMode, ExternalLoopbackMode, TestMode, ConfigMode, PoweredDownMode, RestrictedOperationMode, BusMonitoringMode};
 use embassy_hal_internal::{into_ref, PeripheralRef};
 use fdcan::message_ram::RegisterBlock;
 use fdcan::LastErrorCode;
