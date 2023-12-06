@@ -442,7 +442,7 @@ impl<'d, T: Instance, M: fdcan::Transmit> FdcanTx<'d, T, M> {
 
 #[allow(dead_code)]
 pub struct FdcanRx<'d, T: Instance, M: fdcan::Receive> {
-    can: &'c RefCell<fdcan::FdCan<FdcanInstance<'d, T>, M>>,
+    can: &RefCell<fdcan::FdCan<FdcanInstance<'d, T>, M>>,
 }
 
 impl<'d, T: Instance, M: fdcan::Receive> FdcanRx<'d, T, M> {
