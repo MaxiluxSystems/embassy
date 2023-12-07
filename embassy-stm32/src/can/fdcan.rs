@@ -395,16 +395,16 @@ impl<'d, T: Instance, M: FdcanOperatingMode> Fdcan<'d, T, M>
         None
     }
 
-    pub fn split(self) -> (FdcanTx<'d, T, M>, FdcanRx<'d, T, M>) {
+    pub fn split<'c>(self) -> (FdcanTx<'c, 'd, T, M>, FdcanRx<'c, 'd, T, M>) {
         (FdcanTx { can: &self.can }, FdcanRx { can: &self.can })
     }
 }
 
-pub struct FdcanTx<'d, T: Instance, M: fdcan::Transmit> {
-    can: &'d RefCell<fdcan::FdCan<FdcanInstance<'d, T>, M>>,
+pub struct FdcanTx<'c, 'd, T: Instance, M: fdcan::Transmit> {
+    can: &'c RefCell<fdcan::FdCan<FdcanInstance<'d, T>, M>>,
 }
 
-impl<'d, T: Instance, M: fdcan::Transmit> FdcanTx<'d, T, M> {
+impl<'c, 'd, T: Instance, M: fdcan::Transmit> FdcanTx<'c, 'd, T, M> {
     /// Queues the message to be sent but exerts backpressure.  If a lower-priority
     /// frame is dropped from the mailbox, it is returned.  If no lower-priority frames
     /// can be replaced, this call asynchronously waits for a frame to be successfully
@@ -441,11 +441,11 @@ impl<'d, T: Instance, M: fdcan::Transmit> FdcanTx<'d, T, M> {
 }
 
 #[allow(dead_code)]
-pub struct FdcanRx<'d, T: Instance, M: fdcan::Receive> {
-    can: &'d RefCell<fdcan::FdCan<FdcanInstance<'d, T>, M>>,
+pub struct FdcanRx<'c, 'd, T: Instance, M: fdcan::Receive> {
+    can: &'c RefCell<fdcan::FdCan<FdcanInstance<'d, T>, M>>,
 }
 
-impl<'d, T: Instance, M: fdcan::Receive> FdcanRx<'d, T, M> {
+impl<'c, 'd, T: Instance, M: fdcan::Receive> FdcanRx<'c, 'd, T, M> {
     /// Returns the next received message frame
     pub async fn read(&mut self) -> Result<RxFrame, BusError> {
         poll_fn(|cx| {
