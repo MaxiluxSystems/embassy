@@ -395,7 +395,7 @@ impl<'d, T: Instance, M: FdcanOperatingMode> Fdcan<'d, T, M>
         None
     }
 
-    pub fn split<'c>(self) -> (FdcanTx<'c, 'd, T, M>, FdcanRx<'c, 'd, T, M>) {
+    pub fn split<'c>(&'c self) -> (FdcanTx<'c, 'd, T, M>, FdcanRx<'c, 'd, T, M>) {
         (FdcanTx { can: &self.can }, FdcanRx { can: &self.can })
     }
 }
