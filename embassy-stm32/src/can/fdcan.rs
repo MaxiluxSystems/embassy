@@ -194,7 +194,7 @@ impl<T: Instance> interrupt::typelevel::Handler<T::IT1Interrupt> for IT1Interrup
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Format)]
 pub enum BusError {
     Stuff,
     Form,
