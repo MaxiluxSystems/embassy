@@ -438,7 +438,7 @@ fn main() {
     // ========
     // Generate RccPeripheral impls
 
-    let refcounted_peripherals = HashSet::from(["usart", "adc", "fdcan"]);
+    let refcounted_peripherals = HashSet::from(["usart", "adc", "can"]); // wrong way of doing this, looking for kind == "can" will also effect bxcan chips
     let mut refcount_statics = BTreeSet::new();
 
     for p in METADATA.peripherals {
