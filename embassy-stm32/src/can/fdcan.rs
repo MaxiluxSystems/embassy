@@ -364,6 +364,12 @@ impl<'d, T: Instance, M: FdcanOperatingMode> Fdcan<'d, T, M>
                 //  for now we just drop it
                 let frame: RxFrame = RxFrame::new(rx.unwrap(), &buffer);
                 return Poll::Ready(Ok(frame));
+            } else if let Ok(rx) = self.can.borrow_mut().receive1(&mut buffer) {
+                // rx: fdcan::ReceiveOverrun<RxFrameInfo>
+                // TODO: report overrun?
+                //  for now we just drop it
+                let frame: RxFrame = RxFrame::new(rx.unwrap(), &buffer);
+                return Poll::Ready(Ok(frame));
             } else if let Some(err) = self.curr_error() {  // TODO: this is probably wrong
                 return Poll::Ready(Err(err));
             }
