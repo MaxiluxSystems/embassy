@@ -1,3 +1,6 @@
+#![allow(unused)]
+#![allow(missing_docs)]
+
 #[allow(unused_variables)]
 use core::future::poll_fn;
 use core::marker::PhantomData;
@@ -146,6 +149,7 @@ pub struct CanConfigurator<'d, T: Instance> {
     config: crate::can::fd::config::FdCanConfig,
     /// Reference to internals.
     instance: FdcanInstance<'d, T>,
+    runtime_config: RuntimeConfig<T>,
 }
 
 fn calc_ns_per_timer_tick<T: Instance>(mode: crate::can::fd::config::FrameTransmissionConfig) -> u64 {
@@ -199,7 +203,16 @@ impl<'d, T: Instance> CanConfigurator<'d, T> {
         Self {
             config,
             instance: FdcanInstance(peri),
+            runtime_config: RuntimeConfig::new(),
         }
+    }
+
+    pub fn runtime_config(&self) -> &RuntimeConfig<T> {
+        &self.runtime_config
+    }
+
+    pub fn runtime_config_mut(&mut self) -> &mut RuntimeConfig<T> {
+        &mut self.runtime_config
     }
 
     /// Get configuration
@@ -240,32 +253,6 @@ impl<'d, T: Instance> CanConfigurator<'d, T> {
         self.config = self.config.set_data_bit_timing(nbtr);
     }
 
-    /// Set an Standard Address CAN filter into slot 'id'
-    #[inline]
-    pub fn set_standard_filter(&mut self, slot: StandardFilterSlot, filter: StandardFilter) {
-        T::registers().msg_ram_mut().filters.flssa[slot as usize].activate(filter);
-    }
-
-    /// Set an array of Standard Address CAN filters and overwrite the current set
-    pub fn set_standard_filters(&mut self, filters: &[StandardFilter; STANDARD_FILTER_MAX as usize]) {
-        for (i, f) in filters.iter().enumerate() {
-            T::registers().msg_ram_mut().filters.flssa[i].activate(*f);
-        }
-    }
-
-    /// Set an Extended Address CAN filter into slot 'id'
-    #[inline]
-    pub fn set_extended_filter(&mut self, slot: ExtendedFilterSlot, filter: ExtendedFilter) {
-        T::registers().msg_ram_mut().filters.flesa[slot as usize].activate(filter);
-    }
-
-    /// Set an array of Extended Address CAN filters and overwrite the current set
-    pub fn set_extended_filters(&mut self, filters: &[ExtendedFilter; EXTENDED_FILTER_MAX as usize]) {
-        for (i, f) in filters.iter().enumerate() {
-            T::registers().msg_ram_mut().filters.flesa[i].activate(*f);
-        }
-    }
-
     /// Start in mode.
     pub fn start(self, mode: OperatingMode) -> Can<'d, T> {
         let ns_per_timer_tick = calc_ns_per_timer_tick::<T>(self.config.frame_transmit);
@@ -277,6 +264,7 @@ impl<'d, T: Instance> CanConfigurator<'d, T> {
             config: self.config,
             instance: self.instance,
             _mode: mode,
+            runtime_config: self.runtime_config,
         };
         ret
     }
@@ -303,9 +291,18 @@ pub struct Can<'d, T: Instance> {
     /// Reference to internals.
     instance: FdcanInstance<'d, T>,
     _mode: OperatingMode,
+    runtime_config: RuntimeConfig<T>,
 }
 
 impl<'d, T: Instance> Can<'d, T> {
+    pub fn runtime_config(&self) -> &RuntimeConfig<T> {
+        &self.runtime_config
+    }
+
+    pub fn runtime_config_mut(&mut self) -> &mut RuntimeConfig<T> {
+        &mut self.runtime_config
+    }
+
     /// Flush one of the TX mailboxes.
     pub async fn flush(&self, idx: usize) {
         poll_fn(|cx| {
@@ -351,7 +348,7 @@ impl<'d, T: Instance> Can<'d, T> {
     }
 
     /// Split instance into separate Tx(write) and Rx(read) portions
-    pub fn split(self) -> (CanTx<'d, T>, CanRx<'d, T>) {
+    pub fn split(self) -> (CanTx<'d, T>, CanRx<'d, T>, RuntimeConfig<T>) {
         (
             CanTx {
                 config: self.config,
@@ -363,6 +360,7 @@ impl<'d, T: Instance> Can<'d, T> {
                 _instance2: T::regs(),
                 _mode: self._mode,
             },
+            self.runtime_config,
         )
     }
 
@@ -373,6 +371,7 @@ impl<'d, T: Instance> Can<'d, T> {
             //_instance2: T::regs(),
             instance: tx._instance,
             _mode: rx._mode,
+            runtime_config: RuntimeConfig::new(),
         }
     }
 
@@ -408,6 +407,7 @@ pub struct BufferedCan<'d, T: Instance, const TX_BUF_SIZE: usize, const RX_BUF_S
     _mode: OperatingMode,
     tx_buf: &'static TxBuf<TX_BUF_SIZE>,
     rx_buf: &'static RxBuf<RX_BUF_SIZE>,
+    runtime_config: RuntimeConfig<T>,
 }
 
 impl<'c, 'd, T: Instance, const TX_BUF_SIZE: usize, const RX_BUF_SIZE: usize>
@@ -426,8 +426,17 @@ impl<'c, 'd, T: Instance, const TX_BUF_SIZE: usize, const RX_BUF_SIZE: usize>
             _mode,
             tx_buf,
             rx_buf,
+            runtime_config: RuntimeConfig::new(),
         }
         .setup()
+    }
+
+    pub fn runtime_config(&self) -> &RuntimeConfig<T> {
+        &self.runtime_config
+    }
+
+    pub fn runtime_config_mut(&mut self) -> &mut RuntimeConfig<T> {
+        &mut self.runtime_config
     }
 
     fn setup(self) -> Self {
@@ -801,6 +810,52 @@ impl TxMode {
     /// transmitted, then tries again.
     async fn write_fd<T: Instance>(&self, frame: &FdFrame) -> Option<FdFrame> {
         self.write_generic::<T, _>(frame).await
+    }
+}
+
+pub struct RuntimeConfig<T> {
+    instance: PhantomData<T>,
+}
+
+impl<T: Instance> RuntimeConfig<T> {
+    fn new() -> Self {
+        Self {
+            instance: Default::default(),
+        }
+    }
+
+    #[inline]
+    pub fn set_standard_filter(&mut self, slot: StandardFilterSlot, filter: StandardFilter) {
+        T::registers().msg_ram_mut().filters.flssa[slot as usize].activate(filter);
+    }
+
+    pub fn set_standard_filters(&mut self, filters: &[StandardFilter; STANDARD_FILTER_MAX as usize]) {
+        for (i, f) in filters.iter().enumerate() {
+            T::registers().msg_ram_mut().filters.flssa[i].activate(*f);
+        }
+    }
+
+    #[inline]
+    pub fn set_extended_filter(&mut self, slot: ExtendedFilterSlot, filter: ExtendedFilter) {
+        T::registers().msg_ram_mut().filters.flesa[slot as usize].activate(filter);
+    }
+
+    pub fn set_extended_filters(&mut self, filters: &[ExtendedFilter; EXTENDED_FILTER_MAX as usize]) {
+        for (i, f) in filters.iter().enumerate() {
+            T::registers().msg_ram_mut().filters.flesa[i].activate(*f);
+        }
+    }
+
+    pub fn get_rx_error_count(&self) -> u8 {
+        T::registers().regs.ecr().read().rec()
+    }
+
+    pub fn get_tx_error_count(&self) -> u8 {
+        T::registers().regs.ecr().read().tec()
+    }
+
+    pub fn get_bus_off(&self) -> bool {
+        T::registers().regs.psr().read().bo()
     }
 }
 
