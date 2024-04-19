@@ -76,10 +76,10 @@ impl<T: Instance> interrupt::typelevel::Handler<T::IT0Interrupt> for IT0Interrup
         }
 
         if ir.rfn(0) {
-            T::state().rx_mode.on_interrupt::<T>(0);
+            T::state().rx_mode.on_rfn_interrupt::<T>(0);
         }
         if ir.rfn(1) {
-            T::state().rx_mode.on_interrupt::<T>(1);
+            T::state().rx_mode.on_rfn_interrupt::<T>(1);
         }
 
         if ir.bo() {
@@ -87,6 +87,7 @@ impl<T: Instance> interrupt::typelevel::Handler<T::IT0Interrupt> for IT0Interrup
             if regs.psr().read().bo() {
                 // Initiate bus-off recovery sequence by resetting CCCR.INIT
                 regs.cccr().modify(|w| w.set_init(false));
+                T::state().rx_mode.on_bo_interrupt::<T>();
             }
         }
     }
@@ -681,7 +682,7 @@ impl RxMode {
         }
     }
 
-    fn on_interrupt<T: Instance>(&self, fifonr: usize) {
+    fn on_rfn_interrupt<T: Instance>(&self, fifonr: usize) {
         T::regs().ir().write(|w| w.set_rfn(fifonr, true));
         match self {
             RxMode::NonBuffered(waker) => {
@@ -700,7 +701,20 @@ impl RxMode {
         }
     }
 
-    //async fn read_classic<T: Instance>(&self) -> Result<Envelope, BusError> {
+    fn on_bo_interrupt<T: Instance>(&self) {
+        match self {
+            RxMode::NonBuffered(waker) => {
+                waker.wake();
+            }
+            RxMode::ClassicBuffered(buf) => {
+                let _ = buf.rx_sender.try_send(Err(BusError::BusOff));
+            }
+            RxMode::FdBuffered(buf) => {
+                let _ = buf.rx_sender.try_send(Err(BusError::BusOff));
+            }
+        }
+    }
+
     fn try_read<T: Instance>(&self) -> Option<Result<Envelope, BusError>> {
         if let Some((frame, ts)) = T::registers().read(0) {
             let ts = T::calc_timestamp(T::state().ns_per_timer_tick, ts);
@@ -716,7 +730,6 @@ impl RxMode {
         }
     }
 
-    //async fn read_classic<T: Instance>(&self) -> Result<Envelope, BusError> {
     fn try_read_fd<T: Instance>(&self) -> Option<Result<FdEnvelope, BusError>> {
         if let Some((frame, ts)) = T::registers().read(0) {
             let ts = T::calc_timestamp(T::state().ns_per_timer_tick, ts);
